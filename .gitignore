@@ -1,0 +1,12 @@
+*.o
+*.x
+*.so
+*.a
+
+*~
+*log
+
+*.tmp
+.*.swp
+test/
+work/
