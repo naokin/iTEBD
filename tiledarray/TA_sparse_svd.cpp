@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstring>
 
 #include <Eigen/SVD>
 
@@ -79,10 +80,10 @@ const Wavefunction<double>& wfn,
 
   // stored locally
 
-  tmp_ua.reserve(q0size);
-  tmp_da.reserve(q0size);
-  tmp_ub.reserve(q0size);
-  tmp_db.reserve(q0size);
+  tmp_ua.resize(q0size);
+  tmp_da.resize(q0size);
+  tmp_ub.resize(q0size);
+  tmp_db.resize(q0size);
 
   // number of selected quanta
   size_t nSelQ = 0;
@@ -97,9 +98,9 @@ const Wavefunction<double>& wfn,
   std::vector<size_t> nSvals(q0size,0);
   std::vector<size_t> iOwner(q0size,0);
 
-  for(size_t k = 0; k < q0size; ++k) {
+  world.gop.fence();
 
-    if(k%nproc != iproc) continue; // TODO: use of such a parallel mapping gives better performance (?)
+  for(size_t k = 0; k < q0size; ++k) {
 
     // Def. bitShape for merged matrix
     // (0)  (4)  (f)  (2)
@@ -179,33 +180,34 @@ const Wavefunction<double>& wfn,
       bitShape |= 0x1;
     }
 
-    if(!bitShape) continue;
+    if(!bitShape || (k%nproc != iproc)) continue; // TODO: needs better parallel mapping?
 
     TA::EigenMatrixXd C = TA::EigenMatrixXd::Zero(nrow,ncol);
 
     if(bitShape & 0x8) {
       TA::EigenMatrixXd bf_rep(     prow,     pcol);
-      TA::tensor_to_eigen_submatrix(uu_rep,bf_rep);
+      memcpy(bf_rep.data(),uu_rep.data(),uu_rep.size()*sizeof(double));
       C.block(   0,   0,     prow,     pcol) = bf_rep;
     }
     if(bitShape & 0x4) {
       TA::EigenMatrixXd bf_rep(     prow,ncol-pcol);
-      TA::tensor_to_eigen_submatrix(ud_rep,bf_rep);
+      memcpy(bf_rep.data(),ud_rep.data(),ud_rep.size()*sizeof(double));
       C.block(   0,pcol,     prow,ncol-pcol) = bf_rep;
     }
     if(bitShape & 0x2) {
       TA::EigenMatrixXd bf_rep(nrow-prow,     pcol);
-      TA::tensor_to_eigen_submatrix(du_rep,bf_rep);
+      memcpy(bf_rep.data(),du_rep.data(),du_rep.size()*sizeof(double));
       C.block(prow,   0,nrow-prow,     pcol) = bf_rep;
     }
     if(bitShape & 0x1) {
       TA::EigenMatrixXd bf_rep(nrow-prow,ncol-pcol);
-      TA::tensor_to_eigen_submatrix(dd_rep,bf_rep);
+      memcpy(bf_rep.data(),dd_rep.data(),dd_rep.size()*sizeof(double));
       C.block(prow,pcol,nrow-prow,ncol-pcol) = bf_rep;
     }
 
     // now having a merged blcok matrix
 
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-30-" << k << std::endl;
     Eigen::JacobiSVD<TA::EigenMatrixXd> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
 
     TA::EigenMatrixXd U = svds.matrixU();
@@ -218,6 +220,7 @@ const Wavefunction<double>& wfn,
     // No singular value is selected...
     if(kSvals == 0) continue;
 
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-40-" << k << std::endl;
     nSvals[k] = kSvals;
     iOwner[k] = iproc;
 
@@ -241,15 +244,12 @@ const Wavefunction<double>& wfn,
       TA::eigen_submatrix_to_tensor(Vt.block(   0,pcol,kSvals,ncol-pcol),*tmp_db[k]);
     }
 
-//    tmp_ua.push_back(std::make_pair(index_type{iu,k}, U.block(   0,   0,     prow,kSvals)));
-//    tmp_da.push_back(std::make_pair(index_type{id,k}, U.block(prow,   0,nrow-prow,kSvals)));
-//    tmp_ub.push_back(std::make_pair(index_type{k,ju},Vt.block(   0,   0,kSvals,     pcol)));
-//    tmp_db.push_back(std::make_pair(index_type{k,jd},Vt.block(   0,pcol,kSvals,ncol-pcol)));
-
     ++nSelQ; nSelM += kSvals;
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-60-" << k << std::endl;
   }
 
   world.gop.fence();
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 02" << std::endl;
   world.gop.sum(nSvals.data(),q0size);
   world.gop.sum(iOwner.data(),q0size);
 
@@ -266,6 +266,7 @@ const Wavefunction<double>& wfn,
 
   std::vector<size_t> newRanges(1+nSelQ,0);
 
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 03" << std::endl;
   for(size_t k = 0; k < q0size; ++k) {
 
     if(nSvals[k] == 0) continue;
@@ -282,6 +283,8 @@ const Wavefunction<double>& wfn,
 
     newRanges[iQ] = iM;
   }
+
+  world.gop.fence();
 
   // new range object
 
@@ -329,11 +332,14 @@ const Wavefunction<double>& wfn,
   mpsB.matrix_u = matrix_type(world,trangeB,TA::SparseShape<float>(uShapeB,trangeB));
   mpsB.matrix_d = matrix_type(world,trangeB,TA::SparseShape<float>(dShapeB,trangeB));
 
-  mpsA.matrix_u.set_all_local(0.0);
-  mpsA.matrix_d.set_all_local(0.0);
-  mpsB.matrix_u.set_all_local(0.0);
-  mpsB.matrix_d.set_all_local(0.0);
+//mpsA.matrix_u.set_all_local(0.0);
+//mpsA.matrix_d.set_all_local(0.0);
+//mpsB.matrix_u.set_all_local(0.0);
+//mpsB.matrix_d.set_all_local(0.0);
 
+  world.gop.fence();
+
+//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 04" << std::endl;
   for(size_t k = 0; k < q0size; ++k) {
 
     if(nSvals[k] == 0) continue;
@@ -342,56 +348,56 @@ const Wavefunction<double>& wfn,
     size_t iu,ju,id,jd;
 
     iu = F_find_index_quanta(qR,q0[k]-1); // Find qR[:]+1 == q0[i]
-    ju = F_find_index_quanta(qC,q0[k]+1); // Find -q0[i] == -qC[:]+1
-
     id = F_find_index_quanta(qR,q0[k]+1); // Find qR[:]-1 == q0[i]
-    jd = F_find_index_quanta(qC,q0[k]-1); // Find -q0[i] == -qC[:]+1
+
+    ju = F_find_index_quanta(qC,q0[k]+1); // Find q0[i] == qC[:]+1
+    jd = F_find_index_quanta(qC,q0[k]-1); // Find q0[i] == qC[:]-1
 
     size_t ks = reindex[k];
 
     index_type iuks = {iu,ks};
-    index_type idks = {iu,ks};
+    index_type idks = {id,ks};
     index_type ksju = {ks,ju};
     index_type ksjd = {ks,jd};
 
     if(iOwner[k] == iproc) {
       if(iu != _Q_NOT_FOUND_) {
         if(mpsA.matrix_u.is_local(iuks))
-          mpsA.matrix_u.set(iuks,*tmp_ua[k]);
+          mpsA.matrix_u.set(iuks,tmp_ua[k]->data());
         else
           world.gop.send(mpsA.matrix_u.owner(iuks),4*k+0,*tmp_ua[k]);
       }
       if(id != _Q_NOT_FOUND_) {
         if(mpsA.matrix_d.is_local(idks))
-          mpsA.matrix_d.set(idks,*tmp_da[k]);
+          mpsA.matrix_d.set(idks,tmp_da[k]->data());
         else
           world.gop.send(mpsA.matrix_d.owner(idks),4*k+1,*tmp_da[k]);
       }
-      if(iu != _Q_NOT_FOUND_) {
+      if(ju != _Q_NOT_FOUND_) {
         if(mpsB.matrix_u.is_local(ksju))
-          mpsB.matrix_u.set(ksju,*tmp_ub[k]);
+          mpsB.matrix_u.set(ksju,tmp_ub[k]->data());
         else
           world.gop.send(mpsB.matrix_u.owner(ksju),4*k+2,*tmp_ub[k]);
       }
-      if(iu != _Q_NOT_FOUND_) {
+      if(jd != _Q_NOT_FOUND_) {
         if(mpsB.matrix_d.is_local(ksjd))
-          mpsB.matrix_d.set(ksjd,*tmp_db[k]);
+          mpsB.matrix_d.set(ksjd,tmp_db[k]->data());
         else
           world.gop.send(mpsB.matrix_d.owner(ksjd),4*k+3,*tmp_db[k]);
       }
     }
     else {
       if(iu != _Q_NOT_FOUND_ && mpsA.matrix_u.is_local(iuks))
-        mpsA.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+0));
+        mpsA.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+0).get().data());
 
       if(id != _Q_NOT_FOUND_ && mpsA.matrix_d.is_local(idks))
-        mpsA.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+1));
+        mpsA.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+1).get().data());
 
       if(ju != _Q_NOT_FOUND_ && mpsB.matrix_u.is_local(ksju))
-        mpsB.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+2));
+        mpsB.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+2).get().data());
 
       if(jd != _Q_NOT_FOUND_ && mpsB.matrix_d.is_local(ksjd))
-        mpsB.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3));
+        mpsB.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3).get().data());
     }
   }
 

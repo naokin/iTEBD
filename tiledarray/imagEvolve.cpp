@@ -63,6 +63,11 @@ double imagEvolve (
 
   TA_sparse_svd(world,qB,qB,wfn,qA,lambdaA,mpsA,mpsB,tole);
 
+  if(world.rank() == 0) std::cout << "A MPS(u) :: " << std::endl; std::cout << mpsA.matrix_u << std::endl;
+  if(world.rank() == 0) std::cout << "A MPS(d) :: " << std::endl; std::cout << mpsA.matrix_d << std::endl;
+  if(world.rank() == 0) std::cout << "B MPS(u) :: " << std::endl; std::cout << mpsB.matrix_u << std::endl;
+  if(world.rank() == 0) std::cout << "B MPS(d) :: " << std::endl; std::cout << mpsB.matrix_d << std::endl;
+
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
 

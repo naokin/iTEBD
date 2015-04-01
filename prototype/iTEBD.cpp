@@ -461,7 +461,8 @@ int main ()
   //        "# initial quanta",
   //        "# initial states for each quantum",
   //        "tolerance of singular value")
-  iTEBD(1.0,1.0,0.0,1.0,10000,8,1,1.0e-6);
+//iTEBD(1.0,1.0,0.0,1.0,10000,8,1,1.0e-6);
+  iTEBD(1.0,1.0,0.0,1.0,100,8,1,1.0e-6);
 
   return 0;
 }
