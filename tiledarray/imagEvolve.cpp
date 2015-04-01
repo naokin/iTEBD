@@ -24,9 +24,17 @@ double imagEvolve (
 {
   r_gauge_fix(lambdaB,mpsB);
 
-  Wavefunction<double> wfn; GetWavefunction(mpsA,mpsB,wfn);
+  world.gop.fence(); // FIXME: does this need?
+
+  Wavefunction<double> wfn;
+
+  GetWavefunction(mpsA,mpsB,wfn);
+
+  world.gop.fence(); // FIXME: does this need?
 
   double wfnNorm2 = wfn.norm2(world);
+
+  world.gop.fence(); // FIXME: does this need?
 
   // Compute exp(-h*dt)*wfn
 
@@ -48,6 +56,8 @@ double imagEvolve (
     auto ud_tmp = wfn.matrix_ud;
     auto du_tmp = wfn.matrix_du;
 
+    world.gop.fence(); // FIXME: does this need?
+
     // NOTE: there are no operator implementations *=, /=, +=, -= in TiledArray class (?)
 
     for(auto it = wfn.matrix_uu.begin(); it != wfn.matrix_uu.end(); ++it) it->get() *= (expJz*expHz);
@@ -59,14 +69,21 @@ double imagEvolve (
     for(auto it = wfn.matrix_dd.begin(); it != wfn.matrix_dd.end(); ++it) it->get() *= (expJz/expHz);
   }
 
+  world.gop.fence(); // FIXME: does this need?
+
   double sgvNorm2 = wfn.norm2(world);
 
-  TA_sparse_svd(world,qB,qB,wfn,qA,lambdaA,mpsA,mpsB,tole);
+//std::cout << "DEBUG [ PROCESS:" << world.rank() << " ] :: checking ... " << std::endl;
+  world.gop.fence();
 
-  if(world.rank() == 0) std::cout << "A MPS(u) :: " << std::endl; std::cout << mpsA.matrix_u << std::endl;
-  if(world.rank() == 0) std::cout << "A MPS(d) :: " << std::endl; std::cout << mpsA.matrix_d << std::endl;
-  if(world.rank() == 0) std::cout << "B MPS(u) :: " << std::endl; std::cout << mpsB.matrix_u << std::endl;
-  if(world.rank() == 0) std::cout << "B MPS(d) :: " << std::endl; std::cout << mpsB.matrix_d << std::endl;
+  TA_sparse_svd(world,qB,qB,wfn,qA,lambdaA,mpsA,mpsB,tole);
+//std::cout << "DEBUG [ PROCESS:" << world.rank() << " ] :: ... passed " << std::endl;
+  world.gop.fence();
+
+//if(world.rank() == 0) std::cout << "A MPS(u) :: " << std::endl; std::cout << mpsA.matrix_u;
+//if(world.rank() == 0) std::cout << "A MPS(d) :: " << std::endl; std::cout << mpsA.matrix_d;
+//if(world.rank() == 0) std::cout << "B MPS(u) :: " << std::endl; std::cout << mpsB.matrix_u;
+//if(world.rank() == 0) std::cout << "B MPS(d) :: " << std::endl; std::cout << mpsB.matrix_d;
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
@@ -74,9 +91,15 @@ double imagEvolve (
   double aNorm  = sqrt(aNorm2);
   for(size_t k = 0; k < lambdaA.size(); ++k) lambdaA[k] /= aNorm;
 
+  world.gop.fence(); // FIXME: does this need?
+
   l_gauge_fix        (lambdaA,mpsB);
 
+  world.gop.fence(); // FIXME: does this need?
+
   r_gauge_fix_inverse(lambdaB,mpsB);
+
+  world.gop.fence(); // FIXME: does this need?
 
   return -log(sgvNorm2)/wfnNorm2/dt/2.0;
 }

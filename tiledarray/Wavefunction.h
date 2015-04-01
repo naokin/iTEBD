@@ -34,21 +34,25 @@ struct Wavefunction {
       auto x = it->get(); // TileReference
       for(auto xt = x.begin(); xt != x.end(); ++xt) sqnrm += (*xt)*(*xt);
     }
+    world.gop.fence(); // FIXME: does this need?
 
     for(auto it = matrix_ud.begin(); it != matrix_ud.end(); ++it) {
       auto x = it->get(); // TileReference
       for(auto xt = x.begin(); xt != x.end(); ++xt) sqnrm += (*xt)*(*xt);
     }
+    world.gop.fence(); // FIXME: does this need?
 
     for(auto it = matrix_du.begin(); it != matrix_du.end(); ++it) {
       auto x = it->get(); // TileReference
       for(auto xt = x.begin(); xt != x.end(); ++xt) sqnrm += (*xt)*(*xt);
     }
+    world.gop.fence(); // FIXME: does this need?
 
     for(auto it = matrix_dd.begin(); it != matrix_dd.end(); ++it) {
       auto x = it->get(); // TileReference
       for(auto xt = x.begin(); xt != x.end(); ++xt) sqnrm += (*xt)*(*xt);
     }
+    world.gop.fence(); // FIXME: does this need?
 
     world.gop.sum(&sqnrm,1);
     world.gop.broadcast(sqnrm);

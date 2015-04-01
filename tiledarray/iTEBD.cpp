@@ -47,6 +47,8 @@ void iTEBD (
 
   double E = 0.0;
 
+  const size_t print_freq = 1;
+
   if(world.rank() == 0) {
     std::cout << "\tStarting imaginary time-evolution :: T = " << std::fixed << std::setw(12) << std::setprecision(6) << nStep*dt
                                                   << ", dt = " << std::fixed << std::setw(12) << std::setprecision(6) << dt << std::endl;
@@ -57,20 +59,24 @@ void iTEBD (
     // exp(-ht) acting on A-B
     E = imagEvolve(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,J,Jz,Hz,dt,tole);
 
-    if(world.rank() == 0 && t % 10 == 0) {
+    if(world.rank() == 0 && t % print_freq == 0) {
       std::cout << "\t\tForward  step [" << std::setw(6) << t << "] :: " << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
       std::cout << "\t\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i]; std::cout << std::endl;
       std::cout << "----------------------------------------------------------------" << std::endl;
     }
 
+    world.gop.fence();
+
     // exp(-ht) acting on B-A
     E = imagEvolve(world,qB,lambdaB,mpsB,qA,lambdaA,mpsA,J,Jz,Hz,dt,tole);
 
-    if(world.rank() == 0 && t % 10 == 0) {
+    if(world.rank() == 0 && t % print_freq == 0) {
       std::cout << "\t\tBackward step [" << std::setw(6) << t << "] :: " << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
       std::cout << "\t\t\tqB = "; for(size_t i = 0; i < qB.size(); ++i) std::cout << std::setw(4) << qB[i]; std::cout << std::endl;
       std::cout << "----------------------------------------------------------------" << std::endl;
     }
+
+    world.gop.fence();
   }
 }
 
@@ -84,7 +90,7 @@ int main (int argc, char* argv[])
   //        "# initial states for each quantum",
   //        "tolerance of singular value")
 //iTEBD(world,1.0,1.0,0.0,1.0,10000,8,1,1.0e-6);
-  iTEBD(world,1.0,1.0,0.0,1.0,1,8,1,1.0e-6);
+  iTEBD(world,1.0,1.0,0.0,1.0,11,8,1,1.0e-6);
 
   madness::finalize();
 
