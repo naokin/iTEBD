@@ -4,7 +4,7 @@
 #include <iomanip>
 
 #include "Wavefunction.h"
-#include "GetWavefunction.h"
+#include "SqNorm.h"
 #include "F_gauge_fix.h"
 #include "TA_sparse_svd.h"
 
@@ -28,13 +28,17 @@ double imagEvolve (
 
   Wavefunction<double> wfn;
 
-  GetWavefunction(mpsA,mpsB,wfn);
+  wfn.matrix_uu("i,j") = mpsA.matrix_u("i,k")*mpsB.matrix_u("k,j");
+
+  wfn.matrix_ud("i,j") = mpsA.matrix_u("i,k")*mpsB.matrix_d("k,j");
+
+  wfn.matrix_du("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_u("k,j");
+
+  wfn.matrix_dd("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_d("k,j");
 
   world.gop.fence(); // FIXME: does this need?
 
-  double wfnNorm2 = wfn.norm2(world);
-
-  world.gop.fence(); // FIXME: does this need?
+  double wfnNorm2 = SqNorm(world,wfn);
 
   // Compute exp(-h*dt)*wfn
 
@@ -47,51 +51,34 @@ double imagEvolve (
   // -1 +1 |  0                         -exp(+Jz*dt/4)*sinh(J*dt/2)  exp(+Jz*dt/4)*cosh(J*dt/2)  0
   //    -1 |  0                          0                           0                           exp(-Jz*dt/4)*exp(+Hz*dt)
 
+  Wavefunction<double> sgv;
+
   double expJz = exp(-0.25*Jz*dt);
   double expHz = exp(-Hz*dt);
   double coshJ = cosh(0.5*J*dt);
   double sinhJ = sinh(0.5*J*dt);
 
-  {
-    auto ud_tmp = wfn.matrix_ud;
-    auto du_tmp = wfn.matrix_du;
+  sgv.matrix_uu("i,j") = (expJz*expHz)*wfn.matrix_uu("i,j");
 
-    world.gop.fence(); // FIXME: does this need?
+  sgv.matrix_ud("i,j") = (coshJ/expJz)*wfn.matrix_ud("i,j")-(sinhJ/expJz)*wfn.matrix_du("i,j");
 
-    // NOTE: there are no operator implementations *=, /=, +=, -= in TiledArray class (?)
+  sgv.matrix_du("i,j") = (coshJ/expJz)*wfn.matrix_du("i,j")-(sinhJ/expJz)*wfn.matrix_ud("i,j");
 
-    for(auto it = wfn.matrix_uu.begin(); it != wfn.matrix_uu.end(); ++it) it->get() *= (expJz*expHz);
-
-    wfn.matrix_ud("i,j") = (coshJ/expJz)*ud_tmp("i,j")-(sinhJ/expJz)*du_tmp("i,j");
-
-    wfn.matrix_du("i,j") = (coshJ/expJz)*du_tmp("i,j")-(sinhJ/expJz)*ud_tmp("i,j");
-
-    for(auto it = wfn.matrix_dd.begin(); it != wfn.matrix_dd.end(); ++it) it->get() *= (expJz/expHz);
-  }
+  sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
   world.gop.fence(); // FIXME: does this need?
 
-  double sgvNorm2 = wfn.norm2(world);
+  double sgvNorm2 = SqNorm(world,sgv);
 
-//std::cout << "DEBUG [ PROCESS:" << world.rank() << " ] :: checking ... " << std::endl;
-  world.gop.fence();
+  TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
 
-  TA_sparse_svd(world,qB,qB,wfn,qA,lambdaA,mpsA,mpsB,tole);
-//std::cout << "DEBUG [ PROCESS:" << world.rank() << " ] :: ... passed " << std::endl;
-  world.gop.fence();
-
-//if(world.rank() == 0) std::cout << "A MPS(u) :: " << std::endl; std::cout << mpsA.matrix_u;
-//if(world.rank() == 0) std::cout << "A MPS(d) :: " << std::endl; std::cout << mpsA.matrix_d;
-//if(world.rank() == 0) std::cout << "B MPS(u) :: " << std::endl; std::cout << mpsB.matrix_u;
-//if(world.rank() == 0) std::cout << "B MPS(d) :: " << std::endl; std::cout << mpsB.matrix_d;
+  world.gop.fence(); // FIXME: does this need?
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
 
   double aNorm  = sqrt(aNorm2);
   for(size_t k = 0; k < lambdaA.size(); ++k) lambdaA[k] /= aNorm;
-
-  world.gop.fence(); // FIXME: does this need?
 
   l_gauge_fix        (lambdaA,mpsB);
 

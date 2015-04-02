@@ -1,0 +1,1 @@
+Edit makefine to set paths and type 'make' then 'mpiexec -np ## ./iTEBD.x'

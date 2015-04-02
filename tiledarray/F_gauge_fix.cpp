@@ -5,93 +5,109 @@
 /// \param mps MPS
 void l_gauge_fix (const std::vector<double>& g, MPS<double>& mps)
 {
-  for(auto it = mps.matrix_u.begin(); it != mps.matrix_u.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t lrow = ranges.start()[0];
-    size_t urow = ranges.finish()[0];
-    size_t dcol = ranges.size()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = lrow; ix < urow; ++ix)
-      for(size_t jx = 0; jx < dcol; ++jx, ++xt) *xt *= g[ix];
+  for(size_t k = 0; k < mps.matrix_u.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_u.is_zero(k) && mps.matrix_u.is_local(k)) {
+      auto x = mps.matrix_u.find(k).get();
+      size_t lRow = x.range().start()[0];
+      size_t uRow = x.range().finish()[0];
+      size_t nCols = x.range().size()[1];
+      size_t ijOrd = 0;
+      for(size_t i = lRow; i < uRow; ++i)
+        for(size_t j = 0; j < nCols; ++j, ++ijOrd) x[ijOrd] *= g[i];
+    }
   }
 
-  for(auto it = mps.matrix_d.begin(); it != mps.matrix_d.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t lrow = ranges.start()[0];
-    size_t urow = ranges.finish()[0];
-    size_t dcol = ranges.size()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = lrow; ix < urow; ++ix)
-      for(size_t jx = 0; jx < dcol; ++jx, ++xt) *xt *= g[ix];
+  for(size_t k = 0; k < mps.matrix_d.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_d.is_zero(k) && mps.matrix_d.is_local(k)) {
+      auto x = mps.matrix_d.find(k).get();
+      size_t lRow = x.range().start()[0];
+      size_t uRow = x.range().finish()[0];
+      size_t nCols = x.range().size()[1];
+      size_t ijOrd = 0;
+      for(size_t i = lRow; i < uRow; ++i)
+        for(size_t j = 0; j < nCols; ++j, ++ijOrd) x[ijOrd] *= g[i];
+    }
   }
 }
 
 void r_gauge_fix (const std::vector<double>& g, MPS<double>& mps)
 {
-  for(auto it = mps.matrix_u.begin(); it != mps.matrix_u.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t drow = ranges.size()[0];
-    size_t lcol = ranges.start()[1];
-    size_t ucol = ranges.finish()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = 0; ix < drow; ++ix)
-      for(size_t jx = lcol; jx < ucol; ++jx, ++xt) *xt *= g[jx];
+  for(size_t k = 0; k < mps.matrix_u.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_u.is_zero(k) && mps.matrix_u.is_local(k)) {
+      auto x = mps.matrix_u.find(k).get();
+      size_t nRows = x.range().size()[0];
+      size_t lCol = x.range().start()[1];
+      size_t uCol = x.range().finish()[1];
+      size_t ijOrd = 0;
+      for(size_t i = 0; i < nRows; ++i)
+        for(size_t j = lCol; j < uCol; ++j, ++ijOrd) x[ijOrd] *= g[j];
+    }
   }
 
-  for(auto it = mps.matrix_d.begin(); it != mps.matrix_d.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t drow = ranges.size()[0];
-    size_t lcol = ranges.start()[1];
-    size_t ucol = ranges.finish()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = 0; ix < drow; ++ix)
-      for(size_t jx = lcol; jx < ucol; ++jx, ++xt) *xt *= g[jx];
+  for(size_t k = 0; k < mps.matrix_d.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_d.is_zero(k) && mps.matrix_d.is_local(k)) {
+      auto x = mps.matrix_d.find(k).get();
+      size_t nRows = x.range().size()[0];
+      size_t lCol = x.range().start()[1];
+      size_t uCol = x.range().finish()[1];
+      size_t ijOrd = 0;
+      for(size_t i = 0; i < nRows; ++i)
+        for(size_t j = lCol; j < uCol; ++j, ++ijOrd) x[ijOrd] *= g[j];
+    }
   }
 }
 
 /// Compute g^-1 * MPS
 void l_gauge_fix_inverse (const std::vector<double>& g, MPS<double>& mps)
 {
-  for(auto it = mps.matrix_u.begin(); it != mps.matrix_u.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t lrow = ranges.start()[0];
-    size_t urow = ranges.finish()[0];
-    size_t dcol = ranges.size()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = lrow; ix < urow; ++ix)
-      for(size_t jx = 0; jx < dcol; ++jx, ++xt) *xt /= g[ix];
+  for(size_t k = 0; k < mps.matrix_u.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_u.is_zero(k) && mps.matrix_u.is_local(k)) {
+      auto x = mps.matrix_u.find(k).get();
+      size_t lRow = x.range().start()[0];
+      size_t uRow = x.range().finish()[0];
+      size_t nCols = x.range().size()[1];
+      size_t ijOrd = 0;
+      for(size_t i = lRow; i < uRow; ++i)
+        for(size_t j = 0; j < nCols; ++j, ++ijOrd) x[ijOrd] /= g[i];
+    }
   }
 
-  for(auto it = mps.matrix_d.begin(); it != mps.matrix_d.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t lrow = ranges.start()[0];
-    size_t urow = ranges.finish()[0];
-    size_t dcol = ranges.size()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = lrow; ix < urow; ++ix)
-      for(size_t jx = 0; jx < dcol; ++jx, ++xt) *xt /= g[ix];
+  for(size_t k = 0; k < mps.matrix_d.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_d.is_zero(k) && mps.matrix_d.is_local(k)) {
+      auto x = mps.matrix_d.find(k).get();
+      size_t lRow = x.range().start()[0];
+      size_t uRow = x.range().finish()[0];
+      size_t nCols = x.range().size()[1];
+      size_t ijOrd = 0;
+      for(size_t i = lRow; i < uRow; ++i)
+        for(size_t j = 0; j < nCols; ++j, ++ijOrd) x[ijOrd] /= g[i];
+    }
   }
 }
 
 void r_gauge_fix_inverse (const std::vector<double>& g, MPS<double>& mps)
 {
-  for(auto it = mps.matrix_u.begin(); it != mps.matrix_u.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t drow = ranges.size()[0];
-    size_t lcol = ranges.start()[1];
-    size_t ucol = ranges.finish()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = 0; ix < drow; ++ix)
-      for(size_t jx = lcol; jx < ucol; ++jx, ++xt) *xt /= g[jx];
+  for(size_t k = 0; k < mps.matrix_u.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_u.is_zero(k) && mps.matrix_u.is_local(k)) {
+      auto x = mps.matrix_u.find(k).get();
+      size_t nRows = x.range().size()[0];
+      size_t lCol = x.range().start()[1];
+      size_t uCol = x.range().finish()[1];
+      size_t ijOrd = 0;
+      for(size_t i = 0; i < nRows; ++i)
+        for(size_t j = lCol; j < uCol; ++j, ++ijOrd) x[ijOrd] /= g[j];
+    }
   }
 
-  for(auto it = mps.matrix_d.begin(); it != mps.matrix_d.end(); ++it) {
-    auto ranges = it.make_range();
-    size_t drow = ranges.size()[0];
-    size_t lcol = ranges.start()[1];
-    size_t ucol = ranges.finish()[1];
-    auto xt = it->get().begin();
-    for(size_t ix = 0; ix < drow; ++ix)
-      for(size_t jx = lcol; jx < ucol; ++jx, ++xt) *xt /= g[jx];
+  for(size_t k = 0; k < mps.matrix_d.trange().tiles().volume(); ++k) {
+    if(!mps.matrix_d.is_zero(k) && mps.matrix_d.is_local(k)) {
+      auto x = mps.matrix_d.find(k).get();
+      size_t nRows = x.range().size()[0];
+      size_t lCol = x.range().start()[1];
+      size_t uCol = x.range().finish()[1];
+      size_t ijOrd = 0;
+      for(size_t i = 0; i < nRows; ++i)
+        for(size_t j = lCol; j < uCol; ++j, ++ijOrd) x[ijOrd] /= g[j];
+    }
   }
 }

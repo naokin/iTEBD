@@ -1,5 +1,5 @@
 CXX=mpic++
-CXXFLAGS=-O2 -std=c++11
+CXXFLAGS=-O3 -std=c++11
 
 BLASDIR=/home100/opt/intel/mkl
 BLASINC=-I$(BLASDIR)/include
@@ -12,7 +12,7 @@ TALIB=$(TADIR)/lib/libMAD*.a
 INCLUDEFLAGS= $(BLASINC) $(TAINC)
 LIBRARYFLAGS= $(BLASLIB) $(TALIB)
 
-SRC_iTEBD = F_gauge_fix.cpp  GetWavefunction.cpp  imagEvolve.cpp  iTEBD.cpp  MPS_init.cpp  TA_sparse_svd.cpp
+SRC_iTEBD = F_gauge_fix.cpp  imagEvolve.cpp  iTEBD.cpp  MPS_init.cpp  SqNorm.cpp TA_sparse_svd.cpp
 
 OBJ_iTEBD = $(SRC_iTEBD:.cpp=.o)
 

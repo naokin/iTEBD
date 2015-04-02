@@ -98,8 +98,6 @@ const Wavefunction<double>& wfn,
   std::vector<size_t> nSvals(q0size,0);
   std::vector<size_t> iOwner(q0size,0);
 
-  world.gop.fence();
-
   for(size_t k = 0; k < q0size; ++k) {
 
     // Def. bitShape for merged matrix
@@ -180,6 +178,8 @@ const Wavefunction<double>& wfn,
       bitShape |= 0x1;
     }
 
+    world.gop.fence(); // FIXME: does this need?
+
     if(!bitShape || (k%nproc != iproc)) continue; // TODO: needs better parallel mapping?
 
     TA::EigenMatrixXd C = TA::EigenMatrixXd::Zero(nrow,ncol);
@@ -207,7 +207,6 @@ const Wavefunction<double>& wfn,
 
     // now having a merged blcok matrix
 
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-30-" << k << std::endl;
     Eigen::JacobiSVD<TA::EigenMatrixXd> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
 
     TA::EigenMatrixXd U = svds.matrixU();
@@ -220,7 +219,6 @@ const Wavefunction<double>& wfn,
     // No singular value is selected...
     if(kSvals == 0) continue;
 
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-40-" << k << std::endl;
     nSvals[k] = kSvals;
     iOwner[k] = iproc;
 
@@ -245,11 +243,10 @@ const Wavefunction<double>& wfn,
     }
 
     ++nSelQ; nSelM += kSvals;
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 01-60-" << k << std::endl;
   }
 
-  world.gop.fence();
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 02" << std::endl;
+  world.gop.fence(); // FIXME: does this need?
+
   world.gop.sum(nSvals.data(),q0size);
   world.gop.sum(iOwner.data(),q0size);
 
@@ -266,7 +263,6 @@ const Wavefunction<double>& wfn,
 
   std::vector<size_t> newRanges(1+nSelQ,0);
 
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 03" << std::endl;
   for(size_t k = 0; k < q0size; ++k) {
 
     if(nSvals[k] == 0) continue;
@@ -283,8 +279,6 @@ const Wavefunction<double>& wfn,
 
     newRanges[iQ] = iM;
   }
-
-  world.gop.fence();
 
   // new range object
 
@@ -337,9 +331,6 @@ const Wavefunction<double>& wfn,
 //mpsB.matrix_u.set_all_local(0.0);
 //mpsB.matrix_d.set_all_local(0.0);
 
-  world.gop.fence();
-
-//std::cout << "DEBUG [PROCESS:" << world.rank() << "] :: Check 04" << std::endl;
   for(size_t k = 0; k < q0size; ++k) {
 
     if(nSvals[k] == 0) continue;
@@ -359,6 +350,8 @@ const Wavefunction<double>& wfn,
     index_type idks = {id,ks};
     index_type ksju = {ks,ju};
     index_type ksjd = {ks,jd};
+
+    world.gop.fence(); // this is critical
 
     if(iOwner[k] == iproc) {
       if(iu != _Q_NOT_FOUND_) {
@@ -399,6 +392,8 @@ const Wavefunction<double>& wfn,
       if(jd != _Q_NOT_FOUND_ && mpsB.matrix_d.is_local(ksjd))
         mpsB.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3).get().data());
     }
+
+    world.gop.fence(); // FIXME: does this need?
   }
 
 }
