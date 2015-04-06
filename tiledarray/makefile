@@ -12,17 +12,20 @@ TALIB=$(TADIR)/lib/libMAD*.a
 INCLUDEFLAGS= $(BLASINC) $(TAINC)
 LIBRARYFLAGS= $(BLASLIB) $(TALIB)
 
-SRC_iTEBD = F_gauge_fix.cpp  imagEvolve.cpp  iTEBD.cpp  MPS_init.cpp  SqNorm.cpp TA_sparse_svd.cpp
+SRC_iTEBD = F_gauge_fix.cpp imagEvolve.cpp realEvolve.cpp MPS_init.cpp SqNorm.cpp TA_sparse_svd.cpp
 
 OBJ_iTEBD = $(SRC_iTEBD:.cpp=.o)
 
 .cpp.o	:
 	$(CXX) $(CXXFLAGS) $(INCLUDEFLAGS) -c $< -o $@
 
-all	: iTEBD.x
+all	: iTEBD_imag.x iTEBD_real.x
 
-iTEBD.x	: $(OBJ_iTEBD)
-	$(CXX) $(CXXFLAGS) -o iTEBD.x $(OBJ_iTEBD) $(LIBRARYFLAGS)
+iTEBD_imag.x	: iTEBD_imag.o $(OBJ_iTEBD)
+	$(CXX) $(CXXFLAGS) -o iTEBD_imag.x iTEBD_imag.o $(OBJ_iTEBD) $(LIBRARYFLAGS)
+
+iTEBD_real.x	: iTEBD_real.o $(OBJ_iTEBD)
+	$(CXX) $(CXXFLAGS) -o iTEBD_real.x iTEBD_real.o $(OBJ_iTEBD) $(LIBRARYFLAGS)
 
 clean	:
 	rm *.o; rm *.x; rm *.a;

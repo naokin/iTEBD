@@ -1,1 +1,1 @@
-Edit makefine to set paths and type 'make' then 'mpiexec -np ## ./iTEBD.x'
+Edit makefine to set paths and type 'make' then 'mpiexec -np ## ./iTEBD_imag.x' or 'mpiexec -np ## ./iTEBD_real.x'
