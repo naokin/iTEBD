@@ -415,6 +415,7 @@ const Wavefunction<double>& wfn_imag,
       MPS<double>& mpsB_imag,
       double CUTOFF_)
 {
+//std::cout << "DEBUG[" << world.rank() << "] : 00" << std::endl;
   namespace TA = TiledArray;
 
   // this is also used for static check whether MPS<double>::matrix_t == Wavefunction<double>::matrix_t == matrix_type
@@ -503,6 +504,7 @@ const Wavefunction<double>& wfn_imag,
 
   for(size_t k = 0; k < q0size; ++k) {
 
+//std::cout << "DEBUG[" << world.rank() << "] : 01-A" << std::endl;
     // Def. bitShape for merged matrix
     // (0)  (4)  (f)  (2)
     // 0 0  0 1  1 1  0 0
@@ -593,7 +595,8 @@ const Wavefunction<double>& wfn_imag,
       bitShape |= 0x1;
     }
 
-    world.gop.fence(); // FIXME: does this need?
+//  world.gop.fence(); // FIXME: does this need?
+//std::cout << "DEBUG[" << world.rank() << "] : 01-B" << std::endl;
 
     // TODO: needs better parallel mapping and/or load-balancing
     if(!bitShape || (k%nproc != iproc)) continue;
@@ -631,7 +634,10 @@ const Wavefunction<double>& wfn_imag,
 
     // now having a merged blcok matrix
 
+//std::cout << "DEBUG[" << world.rank() << "] : 01-C" << std::endl;
+    // SVD seems to be bottle neck...
     Eigen::JacobiSVD<Dense_matrix_type> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
+//std::cout << "DEBUG[" << world.rank() << "] : 01-D" << std::endl;
 
     Dense_matrix_type U = svds.matrixU();
     Dense_matrix_type Vt= svds.matrixV().transpose();
@@ -675,9 +681,11 @@ const Wavefunction<double>& wfn_imag,
     }
 
     ++nSelQ; nSelM += kSvals;
+//std::cout << "DEBUG[" << world.rank() << "] : 01-F" << std::endl;
   }
 
   world.gop.fence(); // FIXME: does this need?
+//std::cout << "DEBUG[" << world.rank() << "] : 02" << std::endl;
 
   world.gop.sum(nSvals.data(),q0size);
   world.gop.sum(iOwner.data(),q0size);
@@ -790,6 +798,7 @@ const Wavefunction<double>& wfn_imag,
     index_type ksjd = {ks,jd};
 
     world.gop.fence(); // this is critical
+//std::cout << "DEBUG[" << world.rank() << "] : 03" << std::endl;
 
     // Here, making a lot of communications
 
@@ -805,6 +814,7 @@ const Wavefunction<double>& wfn_imag,
         else
           world.gop.send(mpsA_imag.matrix_u.owner(iuks),8*k+4,*tmp_uai[k]);
       }
+//std::cout << "DEBUG[" << world.rank() << "] : 03-A" << std::endl;
       if(id != _Q_NOT_FOUND_) {
         if(mpsA_real.matrix_d.is_local(idks))
           mpsA_real.matrix_d.set(idks,tmp_dar[k]->data());
@@ -816,6 +826,7 @@ const Wavefunction<double>& wfn_imag,
         else
           world.gop.send(mpsA_imag.matrix_d.owner(idks),8*k+5,*tmp_dai[k]);
       }
+//std::cout << "DEBUG[" << world.rank() << "] : 03-B" << std::endl;
       if(ju != _Q_NOT_FOUND_) {
         if(mpsB_real.matrix_u.is_local(ksju))
           mpsB_real.matrix_u.set(ksju,tmp_ubr[k]->data());
@@ -827,45 +838,58 @@ const Wavefunction<double>& wfn_imag,
         else
           world.gop.send(mpsB_imag.matrix_u.owner(ksju),8*k+6,*tmp_ubi[k]);
       }
+//std::cout << "DEBUG[" << world.rank() << "] : 03-C" << std::endl;
       if(jd != _Q_NOT_FOUND_) {
         if(mpsB_real.matrix_d.is_local(ksjd))
           mpsB_real.matrix_d.set(ksjd,tmp_dbr[k]->data());
         else
-          world.gop.send(mpsB_real.matrix_d.owner(ksjd),4*k+3,*tmp_dbr[k]);
+          world.gop.send(mpsB_real.matrix_d.owner(ksjd),8*k+3,*tmp_dbr[k]);
 
         if(mpsB_imag.matrix_d.is_local(ksjd))
           mpsB_imag.matrix_d.set(ksjd,tmp_dbi[k]->data());
         else
-          world.gop.send(mpsB_imag.matrix_d.owner(ksjd),4*k+7,*tmp_dbi[k]);
+          world.gop.send(mpsB_imag.matrix_d.owner(ksjd),8*k+7,*tmp_dbi[k]);
       }
+//std::cout << "DEBUG[" << world.rank() << "] : 03-D" << std::endl;
     }
     else {
       if(iu != _Q_NOT_FOUND_ && mpsA_real.matrix_u.is_local(iuks))
-        mpsA_real.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+0).get().data());
+        mpsA_real.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+0).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-A recv1" << std::endl;
 
       if(iu != _Q_NOT_FOUND_ && mpsA_imag.matrix_u.is_local(iuks))
-        mpsA_imag.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+4).get().data());
+        mpsA_imag.matrix_u.set(iuks,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+4).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-A recv2" << std::endl;
 
       if(id != _Q_NOT_FOUND_ && mpsA_real.matrix_d.is_local(idks))
-        mpsA_real.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+1).get().data());
+        mpsA_real.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+1).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-B recv1" << std::endl;
 
       if(id != _Q_NOT_FOUND_ && mpsA_imag.matrix_d.is_local(idks))
-        mpsA_imag.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+5).get().data());
+        mpsA_imag.matrix_d.set(idks,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+5).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-B recv2" << std::endl;
 
       if(ju != _Q_NOT_FOUND_ && mpsB_real.matrix_u.is_local(ksju))
-        mpsB_real.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+2).get().data());
+        mpsB_real.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+2).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-C recv1" << std::endl;
 
       if(ju != _Q_NOT_FOUND_ && mpsB_imag.matrix_u.is_local(ksju))
-        mpsB_imag.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+6).get().data());
+        mpsB_imag.matrix_u.set(ksju,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+6).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-C recv2" << std::endl;
 
       if(jd != _Q_NOT_FOUND_ && mpsB_real.matrix_d.is_local(ksjd))
-        mpsB_real.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3).get().data());
+        mpsB_real.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+3).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-D recv1" << std::endl;
 
       if(jd != _Q_NOT_FOUND_ && mpsB_imag.matrix_d.is_local(ksjd))
-        mpsB_imag.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+7).get().data());
+        mpsB_imag.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],8*k+7).get().data());
+//std::cout << "DEBUG[" << world.rank() << "] : 03-D recv2" << std::endl;
     }
 
+//std::cout << "DEBUG[" << world.rank() << "] : 03-F" << std::endl;
     world.gop.fence(); // FIXME: does this need?
+//std::cout << "DEBUG[" << world.rank() << "] : 04" << std::endl;
   }
 
+//std::cout << "DEBUG[" << world.rank() << "] : FF" << std::endl;
 }

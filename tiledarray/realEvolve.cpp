@@ -22,10 +22,12 @@ double realEvolve (
       std::vector<int>& qB, std::vector<double>& lambdaB, MPS<double>& mpsB_real, MPS<double>& mpsB_imag,
       double J, double Jz, double Hz, double dt, double tole)
 {
+//std::cout << "DEBUG[" << world.rank() << "] : 00" << std::endl;
   r_gauge_fix(lambdaB,mpsB_real);
   r_gauge_fix(lambdaB,mpsB_imag);
 
   world.gop.fence(); // FIXME: does this need?
+//std::cout << "DEBUG[" << world.rank() << "] : 01" << std::endl;
 
   Wavefunction<double> wfn_real;
 
@@ -38,6 +40,7 @@ double realEvolve (
   wfn_real.matrix_dd("i,j") = mpsA_real.matrix_d("i,k")*mpsB_real.matrix_d("k,j")-mpsA_imag.matrix_d("i,k")*mpsB_imag.matrix_d("k,j");
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 02" << std::endl;
 
   Wavefunction<double> wfn_imag;
 
@@ -50,6 +53,7 @@ double realEvolve (
   wfn_imag.matrix_dd("i,j") = mpsA_imag.matrix_d("i,k")*mpsB_real.matrix_d("k,j")+mpsA_real.matrix_d("i,k")*mpsB_imag.matrix_d("k,j");
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 03" << std::endl;
 
   double wfnNorm2 = SqNorm(world,wfn_real)+SqNorm(world,wfn_imag);
 
@@ -93,6 +97,7 @@ double realEvolve (
   sgv_real.matrix_dd("i,j") = (cosJz*cosHz+sinJz*sinHz)*wfn_real.matrix_dd("i,j")-(sinJz*cosHz-cosJz*sinHz)*wfn_imag.matrix_dd("i,j");
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 04" << std::endl;
 
   // propagated wave (real part) = Im[exp(-i*h*dt)]*Re[wfn]+Im[exp(-i*h*dt)]*Im[wfn]
 
@@ -107,12 +112,14 @@ double realEvolve (
   sgv_imag.matrix_dd("i,j") = (sinJz*cosHz-cosJz*sinHz)*wfn_real.matrix_dd("i,j")+(cosJz*cosHz+sinJz*sinHz)*wfn_imag.matrix_dd("i,j");
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 05" << std::endl;
 
   double sgvNorm2 = SqNorm(world,sgv_real)+SqNorm(world,sgv_imag);
 
   TA_complex_sparse_svd(world,qB,qB,sgv_real,sgv_imag,qA,lambdaA,mpsA_real,mpsA_imag,mpsB_real,mpsB_imag,tole);
 
   world.gop.fence(); // FIXME: does this need?
+//std::cout << "DEBUG[" << world.rank() << "] : 06" << std::endl;
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
@@ -124,11 +131,15 @@ double realEvolve (
   l_gauge_fix        (lambdaA,mpsB_imag);
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 07" << std::endl;
 
   r_gauge_fix_inverse(lambdaB,mpsB_real);
   r_gauge_fix_inverse(lambdaB,mpsB_imag);
 
   world.gop.fence();
+//std::cout << "DEBUG[" << world.rank() << "] : 08" << std::endl;
 
-  return -log(sgvNorm2)/wfnNorm2/dt/2.0; // FIXME: this is wrong... what value should be returned?
+//std::cout << "DEBUG[" << world.rank() << "] : FF" << std::endl;
+//return -log(sgvNorm2)/wfnNorm2/dt/2.0; // FIXME: this is wrong... what value should be returned?
+  return sgvNorm2/wfnNorm2; // this must be 1.0?
 }
