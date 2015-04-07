@@ -1,4 +1,5 @@
 #include "TA_sparse_svd.h"
+#include "timer.h"
 
 #include <iostream>
 #include <iomanip>
@@ -7,7 +8,7 @@
 #include <cmath>
 #include <cstring>
 
-#include <Eigen/SVD>
+#include <mkl_lapacke.h>
 
 #define _Q_NOT_FOUND_ 0x80000000
 
@@ -178,8 +179,6 @@ const Wavefunction<double>& wfn,
       bitShape |= 0x1;
     }
 
-    world.gop.fence(); // FIXME: does this need?
-
     if(!bitShape || (k%nproc != iproc)) continue; // TODO: needs better parallel mapping?
 
     TA::EigenMatrixXd C = TA::EigenMatrixXd::Zero(nrow,ncol);
@@ -205,16 +204,25 @@ const Wavefunction<double>& wfn,
       C.block(prow,pcol,nrow-prow,ncol-pcol) = bf_rep;
     }
 
-    // now having a merged blcok matrix
+    TA::EigenMatrixXd U(C.rows(), C.rows());
+    TA::EigenMatrixXd Vt(C.cols(), C.cols());
+    std::vector<double> sigma(std::min(C.rows(),C.cols()));
+    {
+      std::vector<double> scratch(sigma.size());
 
-    Eigen::JacobiSVD<TA::EigenMatrixXd> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
+      auto info = LAPACKE_dgesvd( LAPACK_ROW_MAJOR, 'A', 'A', C.rows(), C.cols(), C.data(), C.cols(),
+                                  &sigma[0], U.data(), C.rows(), Vt.data(), C.cols(), &scratch[0] );
+      /* Check for convergence */
+      if( info > 0 ) {
+        printf( "LAPACKE_dgesvd failed" );
+        exit( 1 );
+      }
 
-    TA::EigenMatrixXd U = svds.matrixU();
-    TA::EigenMatrixXd Vt= svds.matrixV().transpose();
+    }
 
     size_t kSvals = 0;
-    for(; kSvals < svds.singularValues().size(); ++kSvals)
-      if(svds.singularValues()[kSvals] < CUTOFF_) break;
+    for(; kSvals < sigma.size(); ++kSvals)
+      if(sigma[kSvals] < CUTOFF_) break;
 
     // No singular value is selected...
     if(kSvals == 0) continue;
@@ -223,7 +231,7 @@ const Wavefunction<double>& wfn,
     iOwner[k] = iproc;
 
     tmp_lm[k].resize(kSvals);
-    for(size_t kSel = 0; kSel < kSvals; ++kSel) tmp_lm[k][kSel] = svds.singularValues()[kSel];
+    for(size_t kSel = 0; kSel < kSvals; ++kSel) tmp_lm[k][kSel] = sigma[kSel];
 
     if(iu != _Q_NOT_FOUND_ && prow != 0) {
       tmp_ua[k].reset(new TA::Tensor<double>(TA::Range(     prow,kSvals)));
@@ -395,5 +403,4 @@ const Wavefunction<double>& wfn,
 
     world.gop.fence(); // FIXME: does this need?
   }
-
 }

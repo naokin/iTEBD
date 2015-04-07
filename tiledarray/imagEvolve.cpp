@@ -7,6 +7,7 @@
 #include "SqNorm.h"
 #include "F_gauge_fix.h"
 #include "TA_sparse_svd.h"
+#include "timer.h"
 
 /// Make a Trotter step of imaginary time-evolution for the ground state search
 /// DEF.: A = mpsA, p = lambdaA, B = mpsB, q = lambdaB
@@ -22,10 +23,16 @@ double imagEvolve (
       std::vector<int>& qB, std::vector<double>& lambdaB, MPS<double>& mpsB,
       double J, double Jz, double Hz, double dt, double tole)
 {
+  iTEBD::Timers<6> timers;
+  timers.set_now_overhead(20); // initialize timers, 20ns overhead is on EFV's macbook pro
+
+  timers.start(0);
   r_gauge_fix(lambdaB,mpsB);
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(0);
 
+  timers.start(1);
   Wavefunction<double> wfn;
 
   wfn.matrix_uu("i,j") = mpsA.matrix_u("i,k")*mpsB.matrix_u("k,j");
@@ -37,7 +44,9 @@ double imagEvolve (
   wfn.matrix_dd("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_d("k,j");
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(1);
 
+  timers.start(2);
   double wfnNorm2 = SqNorm(world,wfn);
 
   // Compute exp(-h*dt)*wfn
@@ -67,12 +76,17 @@ double imagEvolve (
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(2);
 
+  timers.start(3);
   double sgvNorm2 = SqNorm(world,sgv);
 
   TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(3);
+
+  timers.start(4);
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
@@ -83,10 +97,20 @@ double imagEvolve (
   l_gauge_fix        (lambdaA,mpsB);
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(4);
 
+  timers.start(5);
   r_gauge_fix_inverse(lambdaB,mpsB);
 
   world.gop.fence(); // FIXME: does this need?
+  timers.stop(5);
+
+  if (world.rank() == 0) {
+    std::cout << "Wall time (s): SVD=" << timers.read(3)
+              << " non-SVD="
+              <<  timers.read(0) +  timers.read(1) +  timers.read(2) +  timers.read(4) +  timers.read(5)
+              << std::endl;
+  }
 
   return -log(sgvNorm2)/wfnNorm2/dt/2.0;
 }
