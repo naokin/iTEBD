@@ -8,10 +8,10 @@
 #include "imagEvolve.h"
 
 void printQuanta (const std::vector<int>& q, const TiledArray::TiledRange1& t1) {
-  std::cout << "\t\tQ:D = ";
+  std::cout << "\t\tSpin[Dim] = ";
   auto it = t1.begin();
-  for(size_t i = 0; i < q.size(); ++i, ++it) std::cout << q[i] << ":" << (it->second-it->first) << " ";
-  std::cout << " [ " << t1.elements().second-t1.elements().first << " ] " << std::endl;
+  for(size_t i = 0; i < q.size(); ++i, ++it) std::cout << q[i] << "/2[" << (it->second-it->first) << "] ";
+  std::cout << ":: total[" << t1.elements().second-t1.elements().first << "] " << std::endl;
 }
 
 /// iTEBD for imaginary-time evolution on spin-1/2 1D-Heisenberg model
@@ -40,11 +40,8 @@ void iTEBD_imag (
 
   if(world.rank() == 0) std::cout << "\tInitializing MPS..." << std::endl;
 
-//// perform initial wave as test; set 1.0 for all non-zero elements
-//MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,M_spin,M_state);
-
-  // perform initial wave as anti-ferro state like -[+1/2]-[-1/2]-
-  MPS_init_AntiFerro(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB);
+  MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,M_spin,M_state); // perform initial wave as test; set 1.0 for all non-zero elements
+//MPS_init_AntiFerro(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB); // perform initial wave as anti-ferro state like -[+1/2]-[-1/2]-
 
   if(world.rank() == 0) {
     std::cout << "\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i];
@@ -102,7 +99,7 @@ int main (int argc, char* argv[])
   //        "# initial quanta",
   //        "# initial states for each quantum",
   //        "tolerance of singular value")
-  iTEBD_imag(world,1.0,1.0,0.0,0.3,10,8,1,1.0e-6);
+  iTEBD_imag(world,1.0,1.0,0.0,0.3,100,8,1,1.0e-8);
 
   madness::finalize();
 

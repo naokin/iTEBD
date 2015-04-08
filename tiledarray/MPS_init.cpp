@@ -112,8 +112,10 @@ void MPS_init_AntiFerro (
 {
   namespace TA = TiledArray;
 
-  qA.resize(1,+1);
-  qB.resize(1, 0);
+//qA.resize(1,+1);
+//qB.resize(1, 0);
+  qA = { 1 };
+  qB = { 0 };
 
   // define spin symmetry sector
 
@@ -122,8 +124,8 @@ void MPS_init_AntiFerro (
 
   // init lambda
 
-  lambdaA.resize(1,1.0);
-  lambdaB.resize(1,1.0);
+  lambdaA.resize(1*qAsize,1.0);
+  lambdaB.resize(1*qBsize,1.0);
 
   // matrix range
 
@@ -144,11 +146,33 @@ void MPS_init_AntiFerro (
 
   // matrix shape
 
-  TA::Tensor<float> uShapeA(TA::Range(1,1),1.0);
-  TA::Tensor<float> dShapeA(TA::Range(1,1),0.0);
+//TA::Tensor<float> uShapeA(TA::Range(1,1),1.0);
+//TA::Tensor<float> dShapeA(TA::Range(1,1),0.0);
 
-  TA::Tensor<float> uShapeB(TA::Range(1,1),0.0);
-  TA::Tensor<float> dShapeB(TA::Range(1,1),1.0);
+//TA::Tensor<float> uShapeB(TA::Range(1,1),0.0);
+//TA::Tensor<float> dShapeB(TA::Range(1,1),1.0);
+
+  TA::Tensor<float> uShapeA(TA::Range(qBsize,qAsize),0.0);
+  TA::Tensor<float> dShapeA(TA::Range(qBsize,qAsize),0.0);
+
+  for(size_t i = 0; i < qBsize; ++i)
+    for(size_t j = 0; j < qAsize; ++j) {
+      if((qB[i]+1) == qA[j])
+        uShapeA[i*qAsize+j] = 1.0;
+      if((qB[i]-1) == qA[j])
+        dShapeA[i*qAsize+j] = 1.0;
+    }
+
+  TA::Tensor<float> uShapeB(TA::Range(qAsize,qBsize),0.0);
+  TA::Tensor<float> dShapeB(TA::Range(qAsize,qBsize),0.0);
+
+  for(size_t i = 0; i < qAsize; ++i)
+    for(size_t j = 0; j < qBsize; ++j) {
+      if((qA[i]+1) == qB[j])
+        uShapeB[i*qBsize+j] = 1.0;
+      if((qA[i]-1) == qB[j])
+        dShapeB[i*qBsize+j] = 1.0;
+    }
 
   // make matrix
 

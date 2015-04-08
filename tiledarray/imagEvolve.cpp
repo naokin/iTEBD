@@ -22,7 +22,9 @@ double imagEvolve (
       std::vector<int>& qB, std::vector<double>& lambdaB, MPS<double>& mpsB,
       double J, double Jz, double Hz, double dt, double tole)
 {
+//std::cout << "DEBUG[" << world.rank() << "] : 00" << std::endl;
   r_gauge_fix(lambdaB,mpsB);
+//std::cout << "DEBUG[" << world.rank() << "] : 01" << std::endl;
 
   world.gop.fence(); // FIXME: does this need?
 
@@ -38,7 +40,9 @@ double imagEvolve (
 
   world.gop.fence(); // FIXME: does this need?
 
+//std::cout << "DEBUG[" << world.rank() << "] : 02" << std::endl;
   double wfnNorm2 = SqNorm(world,wfn);
+//std::cout << "DEBUG[" << world.rank() << "] : 03" << std::endl;
 
   // Compute exp(-h*dt)*wfn
 
@@ -66,11 +70,14 @@ double imagEvolve (
 
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
+//std::cout << "DEBUG[" << world.rank() << "] : 04" << std::endl;
   world.gop.fence(); // FIXME: does this need?
 
   double sgvNorm2 = SqNorm(world,sgv);
+//std::cout << "DEBUG[" << world.rank() << "] : 05" << std::endl;
 
   TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
+//std::cout << "DEBUG[" << world.rank() << "] : 06" << std::endl;
 
   world.gop.fence(); // FIXME: does this need?
 

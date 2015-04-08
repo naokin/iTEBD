@@ -8,10 +8,10 @@
 #include "realEvolve.h"
 
 void printQuanta (const std::vector<int>& q, const TiledArray::TiledRange1& t1) {
-  std::cout << "\t\tQ:D = ";
+  std::cout << "\t\tSpin[Dim] = ";
   auto it = t1.begin();
-  for(size_t i = 0; i < q.size(); ++i, ++it) std::cout << q[i] << ":" << (it->second-it->first) << " ";
-  std::cout << " [ " << t1.elements().second-t1.elements().first << " ] " << std::endl;
+  for(size_t i = 0; i < q.size(); ++i, ++it) std::cout << q[i] << "/2[" << (it->second-it->first) << "] ";
+  std::cout << ":: total[ " << t1.elements().second-t1.elements().first << "]" << std::endl;
 }
 
 /// iTEBD for real-time evolution on spin-1/2 1D-Heisenberg model
@@ -101,7 +101,7 @@ int main (int argc, char* argv[])
   //        "# initial quanta", // currently not used
   //        "# initial states for each quantum", // currently not used
   //        "tolerance of singular value")
-  iTEBD_real(world,1.0,1.0,0.0,0.1,10,8,1,1.0e-6);
+  iTEBD_real(world,1.0,1.0,0.0,0.03,1000,8,1,1.0e-8);
 
   madness::finalize();
 

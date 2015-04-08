@@ -179,7 +179,7 @@ const Wavefunction<double>& wfn,
       bitShape |= 0x1;
     }
 
-    world.gop.fence(); // FIXME: does this need?
+//  world.gop.fence(); // FIXME: does this need?
 
     if(!bitShape || (k%nproc != iproc)) continue; // TODO: needs better parallel mapping?
 
