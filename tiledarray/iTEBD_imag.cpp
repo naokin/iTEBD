@@ -7,9 +7,15 @@
 #include "MPS_init.h"
 #include "imagEvolve.h"
 
-/// iTEBD with symmetry sector constraints, a large-SVD-free algorithm
-/// Note that size of symmetry sectors, blocks, and states are fixed during time-evolution
-void iTEBD (
+void printQuanta (const std::vector<int>& q, const TiledArray::TiledRange1& t1) {
+  std::cout << "\t\tSpin[Dim] = ";
+  auto it = t1.begin();
+  for(size_t i = 0; i < q.size(); ++i, ++it) std::cout << q[i] << "/2[" << (it->second-it->first) << "] ";
+  std::cout << ":: total[" << t1.elements().second-t1.elements().first << "] " << std::endl;
+}
+
+/// iTEBD for imaginary-time evolution on spin-1/2 1D-Heisenberg model
+void iTEBD_imag (
       madness::World& world,
       double J, double Jz, double Hz, double dt, size_t nStep, int M_spin, size_t M_state, double tole)
 {
@@ -24,19 +30,18 @@ void iTEBD (
 
   // initializing MPS
 
-  std::vector<int> qA;
-  std::vector<double> lambdaA;
-  MPS<double> mpsA;
+  std::vector<int> qA, qB;
 
-  std::vector<int> qB;
-  std::vector<double> lambdaB;
-  MPS<double> mpsB;
+  std::vector<double> lambdaA, lambdaB;
+
+  MPS<double> mpsA, mpsB;
 
   // NOTE: wfn = lambdaB * mpsA * lambdaA * mpsB * lambdaB
 
   if(world.rank() == 0) std::cout << "\tInitializing MPS..." << std::endl;
 
-  MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,M_spin,M_state);
+  MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,M_spin,M_state); // perform initial wave as test; set 1.0 for all non-zero elements
+//MPS_init_AntiFerro(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB); // perform initial wave as anti-ferro state like -[+1/2]-[-1/2]-
 
   if(world.rank() == 0) {
     std::cout << "\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i];
@@ -52,8 +57,9 @@ void iTEBD (
   const size_t print_freq = 1;
 
   if(world.rank() == 0) {
-    std::cout << "\tStarting imaginary time-evolution :: T = " << std::fixed << std::setw(12) << std::setprecision(6) << nStep*dt
-                                                  << ", dt = " << std::fixed << std::setw(12) << std::setprecision(6) << dt << std::endl;
+    std::cout << "\tStarting imaginary time-evolution :: T = "
+              << std::fixed << std::setw(12) << std::setprecision(6) << nStep*dt
+              << ", dt = " << std::fixed << std::setw(12) << std::setprecision(6) << dt << std::endl;
     std::cout << "----------------------------------------------------------------" << std::endl;
   }
 
@@ -62,9 +68,9 @@ void iTEBD (
     E = imagEvolve(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,J,Jz,Hz,dt,tole);
 
     if(world.rank() == 0 && t % print_freq == 0) {
-      std::cout << "\t\tForward  step [" << std::setw(6) << t << "] :: " << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
-      std::cout << "\t\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i];
-      std::cout << " [ " << lambdaA.size() << " ] " << std::endl;
+      std::cout << "\tA-B step [" << std::setw(6) << t << "] :: "
+                << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
+      printQuanta(qA,mpsA.matrix_u.trange().data()[1]);
       std::cout << "----------------------------------------------------------------" << std::endl;
     }
 
@@ -74,9 +80,9 @@ void iTEBD (
     E = imagEvolve(world,qB,lambdaB,mpsB,qA,lambdaA,mpsA,J,Jz,Hz,dt,tole);
 
     if(world.rank() == 0 && t % print_freq == 0) {
-      std::cout << "\t\tBackward step [" << std::setw(6) << t << "] :: " << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
-      std::cout << "\t\t\tqB = "; for(size_t i = 0; i < qB.size(); ++i) std::cout << std::setw(4) << qB[i];
-      std::cout << " [ " << lambdaB.size() << " ] " << std::endl;
+      std::cout << "\tB-A step [" << std::setw(6) << t << "] :: "
+                << std::fixed << std::setw(12) << std::setprecision(8) << E << std::endl;
+      printQuanta(qB,mpsB.matrix_u.trange().data()[1]);
       std::cout << "----------------------------------------------------------------" << std::endl;
     }
 
@@ -89,11 +95,14 @@ int main (int argc, char* argv[])
 {
   madness::World& world = madness::initialize(argc,argv);
 
+  int i;
+  if (world.rank() == 0) std::cin >> i;
+
   // iTEBD (J, Jz, Hz, dt, "# step",
   //        "# initial quanta",
   //        "# initial states for each quantum",
   //        "tolerance of singular value")
-  iTEBD(world,1.0,1.0,0.0,1.0,100,8,1,1.0e-6);
+  iTEBD_imag(world,1.0,1.0,0.0,0.3,100,8,1,1.0e-8);
 
   madness::finalize();
 
