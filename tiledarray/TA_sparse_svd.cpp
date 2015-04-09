@@ -8,7 +8,11 @@
 #include <cmath>
 #include <cstring>
 
+#define EIGEN_USE_LAPACKE
 #include <mkl_lapacke.h>
+#define scomplex MKL_Complex8
+#define dcomplex MKL_Complex16
+#include <Eigen/SVD>
 
 #define _Q_NOT_FOUND_ 0x80000000
 
@@ -204,21 +208,10 @@ const Wavefunction<double>& wfn,
       C.block(prow,pcol,nrow-prow,ncol-pcol) = bf_rep;
     }
 
-    TA::EigenMatrixXd U(C.rows(), C.rows());
-    TA::EigenMatrixXd Vt(C.cols(), C.cols());
-    std::vector<double> sigma(std::min(C.rows(),C.cols()));
-    {
-      std::vector<double> scratch(sigma.size());
-
-      auto info = LAPACKE_dgesvd( LAPACK_ROW_MAJOR, 'A', 'A', C.rows(), C.cols(), C.data(), C.cols(),
-                                  &sigma[0], U.data(), C.rows(), Vt.data(), C.cols(), &scratch[0] );
-      /* Check for convergence */
-      if( info > 0 ) {
-        printf( "LAPACKE_dgesvd failed" );
-        exit( 1 );
-      }
-
-    }
+    Eigen::JacobiSVD<TA::EigenMatrixXd> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
+    TA::EigenMatrixXd U = svds.matrixU();
+    TA::EigenMatrixXd Vt= svds.matrixV().transpose();
+    auto sigma = svds.singularValues();
 
     size_t kSvals = 0;
     for(; kSvals < sigma.size(); ++kSvals)
