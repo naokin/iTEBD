@@ -28,8 +28,6 @@ double imagEvolve (
 
   timers.start(0);
   r_gauge_fix(lambdaB,mpsB);
-
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(0);
 
   timers.start(1);
@@ -42,8 +40,6 @@ double imagEvolve (
   wfn.matrix_du("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_u("k,j");
 
   wfn.matrix_dd("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_d("k,j");
-
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(1);
 
   timers.start(2);
@@ -75,15 +71,12 @@ double imagEvolve (
 
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(2);
 
   timers.start(3);
   double sgvNorm2 = SqNorm(world,sgv);
 
   TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
-
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(3);
 
   timers.start(4);
@@ -95,14 +88,10 @@ double imagEvolve (
   for(size_t k = 0; k < lambdaA.size(); ++k) lambdaA[k] /= aNorm;
 
   l_gauge_fix        (lambdaA,mpsB);
-
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(4);
 
   timers.start(5);
   r_gauge_fix_inverse(lambdaB,mpsB);
-
-  world.gop.fence(); // FIXME: does this need?
   timers.stop(5);
 
   if (world.rank() == 0) {
