@@ -51,23 +51,24 @@ double imagEvolve (
   //         +1                                                     -1
   //         +1                         -1                          +1                          -1
   // ------+--------------------------------------------------------------------------------------------------------------
-  // +1 +1 |  exp(-Jz*dt/4)*exp(-Hz*dt)  0                           0                           0
-  //    -1 |  0                          exp(+Jz*dt/4)*cosh(J*dt/2) -exp(+Jz*dt/4)*sinh(J*dt/2)  0
-  // -1 +1 |  0                         -exp(+Jz*dt/4)*sinh(J*dt/2)  exp(+Jz*dt/4)*cosh(J*dt/2)  0
-  //    -1 |  0                          0                           0                           exp(-Jz*dt/4)*exp(+Hz*dt)
+  // +1 +1 |  exp(-Jz*dt/4)*exp(+Hz*dt)  0                           0                           0
+  //    -1 |  0                          exp(+Jz*dt/4)*cosh(J*dt/2)  exp(+Jz*dt/4)*sinh(J*dt/2)  0
+  // -1 +1 |  0                          exp(+Jz*dt/4)*sinh(J*dt/2)  exp(+Jz*dt/4)*cosh(J*dt/2)  0
+  //    -1 |  0                          0                           0                           exp(-Jz*dt/4)*exp(-Hz*dt)
+
 
   Wavefunction<double> sgv;
 
   double expJz = exp(-0.25*Jz*dt);
-  double expHz = exp(-Hz*dt);
+  double expHz = exp(Hz*dt);
   double coshJ = cosh(0.5*J*dt);
   double sinhJ = sinh(0.5*J*dt);
 
   sgv.matrix_uu("i,j") = (expJz*expHz)*wfn.matrix_uu("i,j");
 
-  sgv.matrix_ud("i,j") = (coshJ/expJz)*wfn.matrix_ud("i,j")-(sinhJ/expJz)*wfn.matrix_du("i,j");
+  sgv.matrix_ud("i,j") = (coshJ/expJz)*wfn.matrix_ud("i,j")+(sinhJ/expJz)*wfn.matrix_du("i,j");
 
-  sgv.matrix_du("i,j") = (coshJ/expJz)*wfn.matrix_du("i,j")-(sinhJ/expJz)*wfn.matrix_ud("i,j");
+  sgv.matrix_du("i,j") = (coshJ/expJz)*wfn.matrix_du("i,j")+(sinhJ/expJz)*wfn.matrix_ud("i,j");
 
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
