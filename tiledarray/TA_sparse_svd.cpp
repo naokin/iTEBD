@@ -9,8 +9,8 @@
 
 #define EIGEN_USE_LAPACKE
 #include <mkl_lapacke.h>
-#define scomplex MKL_Complex8
-#define dcomplex MKL_Complex16
+//#define scomplex MKL_Complex8
+//#define dcomplex MKL_Complex16
 #include <Eigen/SVD>
 
 #include "TA_sparse_svd.h"
