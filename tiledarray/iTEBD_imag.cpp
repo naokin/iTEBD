@@ -95,7 +95,7 @@ int main (int argc, char* argv[])
 {
   madness::World& world = madness::initialize(argc,argv);
 
-  // iTEBD (world, J, Jz, Hz, dt, "# step",
+  // iTEBD (J, Jz, Hz, dt, "# step",
   //        "# initial quanta",
   //        "# initial states for each quantum",
   //        "tolerance of singular value")
