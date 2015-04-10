@@ -1,8 +1,7 @@
-#include "TA_sparse_svd.h"
-
 #include <iostream>
 #include <iomanip>
 
+#include <algorithm>
 #include <cassert>
 #include <complex>
 #include <cmath>
@@ -10,12 +9,16 @@
 
 #include <Eigen/SVD>
 
+#include "TA_sparse_svd.h"
+#include "make_shape.hpp"
+
 #define _Q_NOT_FOUND_ 0x80000000
 
 /// Supportive function to find index specified by quantum number
 size_t F_find_index_quanta (const std::vector<int>& qX, int qValue)
 {
   auto it = std::lower_bound(qX.begin(),qX.end(),qValue);
+
   if(it != qX.end() && (*it) == qValue)
     return std::distance(qX.begin(),it);
   else
@@ -35,9 +38,11 @@ const Wavefunction<double>& wfn,
 {
   namespace TA = TiledArray;
 
-  // this is also used for static check whether MPS<double>::matrix_t == Wavefunction<double>::matrix_t == matrix_type
+  // this is also used for static check
+  // whether MPS<double>::matrix_t == Wavefunction<double>::matrix_t == matrix_type
   typedef TA::Array<double,2,TA::Tensor<double>,TA::SparsePolicy> matrix_type;
 
+  // def. index_type for convenience
   typedef std::vector<size_t> index_type;
 
   // world info
@@ -52,19 +57,19 @@ const Wavefunction<double>& wfn,
   const matrix_type& du = wfn.matrix_du;
   const matrix_type& dd = wfn.matrix_dd;
 
-  // calculate quantum#s of non-truncated singular value sectors
+  // calculate quantum numbers of non-truncated singular value sectors
 
-  std::vector<int> q0; q0.reserve(2*qR.size());
+  std::vector<int> q0; q0.reserve(1+qR.size());
 
-  for(size_t i = 0; i < qR.size(); ++i) {
-    q0.push_back(qR[i]+1);
-    q0.push_back(qR[i]-1);
-  }
-
-  // remove duplication...
+  // Cf.) qR : [ -3 -1 +1 +3 ]
+  //      q0 : [ -4 -2  0 +2 ] [ ]
+  for(size_t i = 0; i < qR.size(); ++i) q0.push_back(qR[i]-1);
 
   std::sort(q0.begin(),q0.end());
-  q0.resize(std::distance(q0.begin(),std::unique(q0.begin(),q0.end())));
+
+  // Cf.) q0 : [ -4 -2  0 +2 ] -> q0.back()+2 = +4
+  //      q0 : [ -4 -2  0 +2 +4 ]
+  q0.push_back(q0.back()+2);
 
   size_t q0size = q0.size();
 
@@ -179,9 +184,9 @@ const Wavefunction<double>& wfn,
       bitShape |= 0x1;
     }
 
-//  world.gop.fence(); // FIXME: does this need?
-
     if(!bitShape || (k%nproc != iproc)) continue; // TODO: needs better parallel mapping?
+
+    // Now SVD on block matrix is done and stored locally
 
     TA::EigenMatrixXd C = TA::EigenMatrixXd::Zero(nrow,ncol);
 
@@ -226,19 +231,31 @@ const Wavefunction<double>& wfn,
     tmp_lm[k].resize(kSvals);
     for(size_t kSel = 0; kSel < kSvals; ++kSel) tmp_lm[k][kSel] = svds.singularValues()[kSel];
 
-    if(iu != _Q_NOT_FOUND_ && prow != 0) {
+//  if(iu != _Q_NOT_FOUND_ && prow != 0) {
+    if(bitShape & 0xc) {
+      // 1 1
+      // x x
       tmp_ua[k].reset(new TA::Tensor<double>(TA::Range(     prow,kSvals)));
       TA::eigen_submatrix_to_tensor( U.block(   0,   0,     prow,kSvals),*tmp_ua[k]);
     }
-    if(id != _Q_NOT_FOUND_ && prow != nrow) {
+//  if(id != _Q_NOT_FOUND_ && prow != nrow) {
+    if(bitShape & 0x3) {
+      // x x
+      // 1 1
       tmp_da[k].reset(new TA::Tensor<double>(TA::Range(nrow-prow,kSvals)));
       TA::eigen_submatrix_to_tensor( U.block(prow,   0,nrow-prow,kSvals),*tmp_da[k]);
     }
-    if(ju != _Q_NOT_FOUND_ && pcol != 0) {
+//  if(ju != _Q_NOT_FOUND_ && pcol != 0) {
+    if(bitShape & 0xa) {
+      // 1 x
+      // 1 x
       tmp_ub[k].reset(new TA::Tensor<double>(TA::Range(kSvals,     pcol)));
       TA::eigen_submatrix_to_tensor(Vt.block(   0,   0,kSvals,     pcol),*tmp_ub[k]);
     }
-    if(jd != _Q_NOT_FOUND_ && pcol != ncol) {
+//  if(jd != _Q_NOT_FOUND_ && pcol != ncol) {
+    if(bitShape & 0x5) {
+      // x 1
+      // x 1
       tmp_db[k].reset(new TA::Tensor<double>(TA::Range(kSvals,ncol-pcol)));
       TA::eigen_submatrix_to_tensor(Vt.block(   0,pcol,kSvals,ncol-pcol),*tmp_db[k]);
     }
@@ -246,13 +263,15 @@ const Wavefunction<double>& wfn,
     ++nSelQ; nSelM += kSvals;
   }
 
-  world.gop.fence(); // FIXME: does this need?
+  // accumulate non-zero block info
 
   world.gop.sum(nSvals.data(),q0size);
   world.gop.sum(iOwner.data(),q0size);
 
   world.gop.sum(nSelQ);
   world.gop.sum(nSelM);
+
+  // this is map from full block index to truncated block index
 
   std::vector<size_t> reindex(q0size,q0size);
 
@@ -263,6 +282,8 @@ const Wavefunction<double>& wfn,
   size_t iM = 0;
 
   std::vector<size_t> newRanges(1+nSelQ,0);
+
+  // broadcasting singular values
 
   for(size_t k = 0; k < q0size; ++k) {
 
@@ -291,52 +312,28 @@ const Wavefunction<double>& wfn,
   size_t qRsize = qR.size();
   size_t qCsize = qC.size();
 
-  TA::Tensor<float> uShapeA(TA::Range(qRsize,qSsize),0.0);
-  TA::Tensor<float> dShapeA(TA::Range(qRsize,qSsize),0.0);
-
-  for(size_t i = 0; i < qRsize; ++i)
-    for(size_t j = 0; j < qSsize; ++j) {
-      if((qR[i]+1) == qS[j])
-        uShapeA[i*qSsize+j] = 1.0;
-      if((qR[i]-1) == qS[j])
-        dShapeA[i*qSsize+j] = 1.0;
-    }
-
-  TA::Tensor<float> uShapeB(TA::Range(qSsize,qCsize),0.0);
-  TA::Tensor<float> dShapeB(TA::Range(qSsize,qCsize),0.0);
-
-  for(size_t i = 0; i < qSsize; ++i)
-    for(size_t j = 0; j < qCsize; ++j) {
-      if((qS[i]+1) == qC[j])
-        uShapeB[i*qCsize+j] = 1.0;
-      if((qS[i]-1) == qC[j])
-        dShapeB[i*qCsize+j] = 1.0;
-    }
-
   // construct Array objects for return
 
   std::vector<TA::TiledRange1> rangesA = {rangeR,rangeS};
   TA::TiledRange trangeA(rangesA.begin(),rangesA.end());
 
-  mpsA.matrix_u = matrix_type(world,trangeA,TA::SparseShape<float>(uShapeA,trangeA));
-  mpsA.matrix_d = matrix_type(world,trangeA,TA::SparseShape<float>(dShapeA,trangeA));
+  mpsA.matrix_u = matrix_type(world,trangeA,make_shape(trangeA,+1,qR,qS));
+  mpsA.matrix_d = matrix_type(world,trangeA,make_shape(trangeA,-1,qR,qS));
 
   std::vector<TA::TiledRange1> rangesB = {rangeS,rangeC};
   TA::TiledRange trangeB(rangesB.begin(),rangesB.end());
 
-  mpsB.matrix_u = matrix_type(world,trangeB,TA::SparseShape<float>(uShapeB,trangeB));
-  mpsB.matrix_d = matrix_type(world,trangeB,TA::SparseShape<float>(dShapeB,trangeB));
+  mpsB.matrix_u = matrix_type(world,trangeB,make_shape(trangeB,+1,qS,qC));
+  mpsB.matrix_d = matrix_type(world,trangeB,make_shape(trangeB,-1,qS,qC));
 
-//mpsA.matrix_u.set_all_local(0.0);
-//mpsA.matrix_d.set_all_local(0.0);
-//mpsB.matrix_u.set_all_local(0.0);
-//mpsB.matrix_d.set_all_local(0.0);
+  // Now, copying temporary storage (tmp_**) to each non-zero tile of TA::Array
 
   for(size_t k = 0; k < q0size; ++k) {
 
     if(nSvals[k] == 0) continue;
 
     // index objects for sparse blocks
+
     size_t iu,ju,id,jd;
 
     iu = F_find_index_quanta(qR,q0[k]-1); // Find qR[:]+1 == q0[i]
@@ -351,8 +348,6 @@ const Wavefunction<double>& wfn,
     index_type idks = {id,ks};
     index_type ksju = {ks,ju};
     index_type ksjd = {ks,jd};
-
-    world.gop.fence(); // this is critical
 
     if(iOwner[k] == iproc) {
       if(iu != _Q_NOT_FOUND_) {
@@ -393,8 +388,6 @@ const Wavefunction<double>& wfn,
       if(jd != _Q_NOT_FOUND_ && mpsB.matrix_d.is_local(ksjd))
         mpsB.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3).get().data());
     }
-
-    world.gop.fence(); // FIXME: does this need?
   }
 
 }

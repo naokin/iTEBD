@@ -40,8 +40,7 @@ void iTEBD_imag (
 
   if(world.rank() == 0) std::cout << "\tInitializing MPS..." << std::endl;
 
-  MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB,M_spin,M_state); // perform initial wave as test; set 1.0 for all non-zero elements
-//MPS_init_AntiFerro(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB); // perform initial wave as anti-ferro state like -[+1/2]-[-1/2]-
+  MPS_init(world,qA,lambdaA,mpsA,qB,lambdaB,mpsB); // perform initial wave as anti-ferro state
 
   if(world.rank() == 0) {
     std::cout << "\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i];

@@ -43,7 +43,7 @@ void iTEBD_real (
 
   // perform initial wave as anti-ferro state like -[+1/2]-[-1/2]-
 
-  MPS_init_AntiFerro(world,qA,lambdaA,mpsA_real,mpsA_imag,qB,lambdaB,mpsB_real,mpsB_imag);
+  MPS_init(world,qA,lambdaA,mpsA_real,mpsA_imag,qB,lambdaB,mpsB_real,mpsB_imag);
 
   if(world.rank() == 0) {
     std::cout << "\t\tqA = "; for(size_t i = 0; i < qA.size(); ++i) std::cout << std::setw(4) << qA[i];

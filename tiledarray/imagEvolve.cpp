@@ -38,7 +38,7 @@ double imagEvolve (
 
   wfn.matrix_dd("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_d("k,j");
 
-  world.gop.fence(); // FIXME: does this need?
+//world.gop.fence(); // FIXME: does this need?
 
 //std::cout << "DEBUG[" << world.rank() << "] : 02" << std::endl;
   double wfnNorm2 = SqNorm(world,wfn);
@@ -71,7 +71,7 @@ double imagEvolve (
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
 //std::cout << "DEBUG[" << world.rank() << "] : 04" << std::endl;
-  world.gop.fence(); // FIXME: does this need?
+//world.gop.fence(); // FIXME: does this need?
 
   double sgvNorm2 = SqNorm(world,sgv);
 //std::cout << "DEBUG[" << world.rank() << "] : 05" << std::endl;
@@ -79,7 +79,7 @@ double imagEvolve (
   TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
 //std::cout << "DEBUG[" << world.rank() << "] : 06" << std::endl;
 
-  world.gop.fence(); // FIXME: does this need?
+//world.gop.fence(); // FIXME: does this need?
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
