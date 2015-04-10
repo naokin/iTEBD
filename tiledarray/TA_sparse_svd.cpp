@@ -7,9 +7,14 @@
 #include <cmath>
 #include <cstring>
 
+#define EIGEN_USE_LAPACKE
+#include <mkl_lapacke.h>
+#define scomplex MKL_Complex8
+#define dcomplex MKL_Complex16
 #include <Eigen/SVD>
 
 #include "TA_sparse_svd.h"
+#include "timer.h"
 #include "make_shape.hpp"
 
 #define _Q_NOT_FOUND_ 0x80000000
@@ -211,16 +216,14 @@ const Wavefunction<double>& wfn,
       C.block(prow,pcol,nrow-prow,ncol-pcol) = bf_rep;
     }
 
-    // now having a merged blcok matrix
-
     Eigen::JacobiSVD<TA::EigenMatrixXd> svds(C,Eigen::ComputeThinU|Eigen::ComputeThinV);
-
     TA::EigenMatrixXd U = svds.matrixU();
     TA::EigenMatrixXd Vt= svds.matrixV().transpose();
+    auto sigma = svds.singularValues();
 
     size_t kSvals = 0;
-    for(; kSvals < svds.singularValues().size(); ++kSvals)
-      if(svds.singularValues()[kSvals] < CUTOFF_) break;
+    for(; kSvals < sigma.size(); ++kSvals)
+      if(sigma[kSvals] < CUTOFF_) break;
 
     // No singular value is selected...
     if(kSvals == 0) continue;
@@ -229,7 +232,7 @@ const Wavefunction<double>& wfn,
     iOwner[k] = iproc;
 
     tmp_lm[k].resize(kSvals);
-    for(size_t kSel = 0; kSel < kSvals; ++kSel) tmp_lm[k][kSel] = svds.singularValues()[kSel];
+    for(size_t kSel = 0; kSel < kSvals; ++kSel) tmp_lm[k][kSel] = sigma[kSel];
 
 //  if(iu != _Q_NOT_FOUND_ && prow != 0) {
     if(bitShape & 0xc) {
@@ -389,7 +392,6 @@ const Wavefunction<double>& wfn,
         mpsB.matrix_d.set(ksjd,world.gop.recv<TA::Tensor<double>>(iOwner[k],4*k+3).get().data());
     }
   }
-
 }
 
 /// perform SVD on complex wavefunction

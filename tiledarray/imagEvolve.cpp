@@ -7,6 +7,7 @@
 #include "SqNorm.h"
 #include "F_gauge_fix.h"
 #include "TA_sparse_svd.h"
+#include "timer.h"
 
 /// Make a Trotter step of imaginary time-evolution for the ground state search
 /// DEF.: A = mpsA, p = lambdaA, B = mpsB, q = lambdaB
@@ -22,12 +23,14 @@ double imagEvolve (
       std::vector<int>& qB, std::vector<double>& lambdaB, MPS<double>& mpsB,
       double J, double Jz, double Hz, double dt, double tole)
 {
-//std::cout << "DEBUG[" << world.rank() << "] : 00" << std::endl;
+  iTEBD::Timers<6> timers;
+  timers.set_now_overhead(20); // initialize timers, 20ns overhead is on EFV's macbook pro
+
+  timers.start(0);
   r_gauge_fix(lambdaB,mpsB);
-//std::cout << "DEBUG[" << world.rank() << "] : 01" << std::endl;
+  timers.stop(0);
 
-  world.gop.fence(); // FIXME: does this need?
-
+  timers.start(1);
   Wavefunction<double> wfn;
 
   wfn.matrix_uu("i,j") = mpsA.matrix_u("i,k")*mpsB.matrix_u("k,j");
@@ -37,12 +40,10 @@ double imagEvolve (
   wfn.matrix_du("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_u("k,j");
 
   wfn.matrix_dd("i,j") = mpsA.matrix_d("i,k")*mpsB.matrix_d("k,j");
+  timers.stop(1);
 
-//world.gop.fence(); // FIXME: does this need?
-
-//std::cout << "DEBUG[" << world.rank() << "] : 02" << std::endl;
+  timers.start(2);
   double wfnNorm2 = SqNorm(world,wfn);
-//std::cout << "DEBUG[" << world.rank() << "] : 03" << std::endl;
 
   // Compute exp(-h*dt)*wfn
 
@@ -54,6 +55,7 @@ double imagEvolve (
   //    -1 |  0                          exp(+Jz*dt/4)*cosh(J*dt/2)  exp(+Jz*dt/4)*sinh(J*dt/2)  0
   // -1 +1 |  0                          exp(+Jz*dt/4)*sinh(J*dt/2)  exp(+Jz*dt/4)*cosh(J*dt/2)  0
   //    -1 |  0                          0                           0                           exp(-Jz*dt/4)*exp(-Hz*dt)
+
 
   Wavefunction<double> sgv;
 
@@ -70,16 +72,15 @@ double imagEvolve (
 
   sgv.matrix_dd("i,j") = (expJz/expHz)*wfn.matrix_dd("i,j");
 
-//std::cout << "DEBUG[" << world.rank() << "] : 04" << std::endl;
-//world.gop.fence(); // FIXME: does this need?
+  timers.stop(2);
 
+  timers.start(3);
   double sgvNorm2 = SqNorm(world,sgv);
-//std::cout << "DEBUG[" << world.rank() << "] : 05" << std::endl;
 
   TA_sparse_svd(world,qB,qB,sgv,qA,lambdaA,mpsA,mpsB,tole);
-//std::cout << "DEBUG[" << world.rank() << "] : 06" << std::endl;
+  timers.stop(3);
 
-//world.gop.fence(); // FIXME: does this need?
+  timers.start(4);
 
   double aNorm2 = 0.0;
   for(size_t k = 0; k < lambdaA.size(); ++k) aNorm2 += lambdaA[k]*lambdaA[k];
@@ -88,12 +89,18 @@ double imagEvolve (
   for(size_t k = 0; k < lambdaA.size(); ++k) lambdaA[k] /= aNorm;
 
   l_gauge_fix        (lambdaA,mpsB);
+  timers.stop(4);
 
-  world.gop.fence(); // FIXME: does this need?
-
+  timers.start(5);
   r_gauge_fix_inverse(lambdaB,mpsB);
+  timers.stop(5);
 
-  world.gop.fence(); // FIXME: does this need?
+  if (world.rank() == 0) {
+    std::cout << "Wall time (s): SVD=" << timers.read(3)
+              << " non-SVD="
+              <<  timers.read(0) +  timers.read(1) +  timers.read(2) +  timers.read(4) +  timers.read(5)
+              << std::endl;
+  }
 
   return -log(sgvNorm2)/wfnNorm2/dt/2.0;
 }
